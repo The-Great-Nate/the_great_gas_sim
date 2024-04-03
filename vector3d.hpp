@@ -62,7 +62,7 @@ public:
 
 	// Dot product between this vector and another vector v
 	double dot(const vec &v) const;
- 
+
 	//  Angle between this vector another vector v
 	double angle(const vec &v) const;
 
@@ -76,22 +76,22 @@ public:
 	double z() const;
 
 	//	modify x_
-	double set_x() ;
+	double set_x();
 
 	//	modify y_
-	double set_y() ;
+	double set_y();
 
 	//	modify z_
-	double set_z() ;
+	double set_z();
 
 private:
-    // Components of the 3d vector
+	// Components of the 3d vector
 	double x_;
 	double y_;
 	double z_;
 };
 
 std::ostream &operator<<(std::ostream &os, const vec &v); // Overload insertion operator for displaying vectors
-vec operator*(double f, const vec &rhs); // Overload * for doubles to allow for the more natural mutiplication ordering f*vec. Above we handled the case vec*f.
+vec operator*(double f, const vec &rhs);				  // Overload * for doubles to allow for the more natural mutiplication ordering f*vec. Above we handled the case vec*f.
 
-#endif  // VECTOR3D_H
+#endif // VECTOR3D_H
