@@ -182,3 +182,4 @@ double vec::y() const{
 double vec::z() const{
 	return z_;
 }
+
