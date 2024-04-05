@@ -2,27 +2,20 @@
 #include <fstream>
 #include <vector>
 #include <cmath>
-#include <string>
-#include <filesystem>
-#include <iomanip>
 #include "vector3d.cpp"
-#include "rng.cpp"
-
-
 #define K_B 1.380649E-23
 #define u 1.660538921E-24
 
 // Constants
-const double epsilon = 125.7 * K_B;                     // Lennard-Jones potential parameter
-const double sigma = 0.3345E-9;                         // Lennard-Jones potential parameter
+const double epsilon = 125.7 * K_B; // Lennard-Jones potential parameter
+const double sigma = 0.3345E-9;     // Lennard-Jones potential parameter
+const int N = 2;
+const int steps = 10000;
 const double ma = 39.948 * u;                           // Reference mass (particle mass)
 const double t0 = sqrt((ma * pow(sigma, 2)) / epsilon); // Reference time
+const double dt = 0.01;                                 // Time step size
 const double box_size = sigma * 2 / sigma;
 const double dimentionless_mass = ma / ma;
-const double half_box = box_size / 2.0;
-int N;
-int steps;
-double dt; // Time step size
 
 struct Particle
 {
@@ -49,41 +42,43 @@ vec lj_force(vec r1, vec r2)
 
 vec dimensionless_lj(vec r1, vec r2)
 {
-    //std::cout << "r1" << r1 << std::endl;
-    //std::cout << "r2" << r2 << std::endl;
     vec diff = r2 - r1;
-    //std::cout << "diff" << diff << std::endl;
     double r_mag = diff.length() / sigma;
     vec r_hat = diff / r_mag;
-    //std::cout << "r_mag" << r_mag << std::endl;
-    //std::cout << "r_hat" << r_hat << std::endl;
-    //std::cout << ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) << std::endl;
+    //std::cout << ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) * r_hat << std::endl;
     return ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) * r_hat;
 };
 
-void write_data(const Particle particle, int n, int step, std::ofstream &gas_file)
+void write_data(const Particle particle, int n, int step)
 {
-
+    std::ofstream gas_file;
+    gas_file.open("gas_" + std::to_string(n) + ".txt", std::ios_base::app);
     // gas_file << "x\ty\tz\tvx\tvy\tvz\tax\tay\taz\n";
     if (gas_file.is_open())
     {
-        gas_file << dt * step << "\t" << n << "\t"
+        gas_file << dt*step << "\t" 
                  << particle.r.x() << "\t" << particle.r.y() << "\t" << particle.r.z() << "\t"
                  << particle.v.x() << "\t" << particle.v.y() << "\t" << particle.v.z() << "\t"
                  << particle.a.x() << "\t" << particle.a.y() << "\t" << particle.a.z() << "\n";
     }
+    gas_file.close();
 }
 
-void write_columns(std::ofstream &gas_file)
+void write_columns(int n)
 {
+    std::ofstream gas_file;
+    gas_file.open("gas_" + std::to_string(n) + ".txt");
+    // gas_file << "x\ty\tz\tvx\tvy\tvz\tax\tay\taz\n";
     if (gas_file.is_open())
     {
-        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\n";
+        gas_file << "t\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\n";
     }
+    gas_file.close();
 }
 
 void check_periodic_conditions(Particle &particle)
 {
+    const double half_box = box_size / 2.0;
     if (particle.r.x() > half_box)
     {
         particle.r.set(half_box, particle.r.y(), particle.r.z());
@@ -124,14 +119,41 @@ void check_periodic_conditions(Particle &particle)
     }
 }
 
-void verlet(std::vector<Particle> &particles, int step, std::string file_name, std::ofstream &gas_file)
+void verlet(std::vector<Particle> &particles, int step)
 {
+    int N = particles.size();
+
     for (int i = 0; i < N; ++i)
     {
-        write_data(particles[i], i, step, gas_file);
-        //std::cout << "v " << particles[i].v << i << std::endl;
+        write_data(particles[i], i, step);
+    }
+
+/* This force loop was performed twice in initial testing of the simulation. Will be deleted
+    for (int i = 0; i < N; ++i)
+    {
+        // particles[i].a.set(0, 0, 0);
+        for (int j = 0; j < N; ++j)
+        {
+            // std::cout << "a " << particles[i].a << i << std::endl;
+            if (i != j)
+            {
+                vec force = dimensionless_lj(particles[i].r, particles[j].r);
+                particles[i].a += force;
+            }
+        }
+    }
+*/
+
+    for (int i = 0; i < N; ++i)
+    {
+
+        // std::cout << "v " << particles[i].v << i << std::endl;
         particles[i].v.set(particles[i].v.x() + 0.5 * dt * particles[i].a.x(), particles[i].v.y() + 0.5 * dt * particles[i].a.y(), particles[i].v.z() + 0.5 * dt * particles[i].a.z());
-        //std::cout << "r " << particles[i].r << i << std::endl;
+    }
+
+    for (int i = 0; i < N; ++i)
+    {
+        // std::cout << "r " << particles[i].r << i << std::endl;
         particles[i].r.set(particles[i].r.x() + dt * particles[i].v.x(), particles[i].r.y() + dt * particles[i].v.y(), particles[i].r.z() + dt * particles[i].v.z());
         check_periodic_conditions(particles[i]);
     }
@@ -141,7 +163,7 @@ void verlet(std::vector<Particle> &particles, int step, std::string file_name, s
         // particles[i].a.set(0, 0, 0);
         for (int j = 0; j < N; ++j)
         {
-            //std::cout << "a " << particles[i].a << i << std::endl;
+            // std::cout << "a " << particles[i].a << i << std::endl;
             if (i != j)
             {
                 vec force = dimensionless_lj(particles[i].r, particles[j].r);
@@ -156,64 +178,18 @@ void verlet(std::vector<Particle> &particles, int step, std::string file_name, s
     }
 }
 
-void random_init_conditions(std::vector<Particle> &particles)
-{
-    RandomNumbers rand_nums(N);
-    rand_nums = generate(N, box_size);
-    std::vector<double> rand_x = rand_nums.rand_x;
-    std::vector<double> rand_y = rand_nums.rand_y;
-    std::vector<double> rand_z = rand_nums.rand_z;
-    
-    for (int i = 0; i < N; ++i)
-    {
-        particles[i].r.set(rand_x[i], rand_y[i], rand_z[i]);
-    }
-}
-
 int main()
 {
-    std::vector<Particle> particles;
-    int check_bound;
-    std::cout << "Would you like to check if 2 particles are bound to one another? (0 if no, 1 if yes): ";
-    std::cin >> check_bound;
-    if (check_bound == 1)
+    std::vector<Particle> particles(N, Particle(ma));
+    particles[0].r.set(0.99-sigma, 0, 0);
+    particles[1].r.set(0.99, 0, 0);
+    for (int i = 0; i < N; ++i)
     {
-        std::cout << "Will set initial coniditons accordingly.\nn is now = 2" << std::endl;
-        N = 2;
-        particles.resize(N, Particle(ma)); // Resize particles vector
-        particles[0].r.set(sigma, 0, 0);
-        particles[1].r.set(-sigma, 0, 0);
+        write_columns(i);
     }
-
-    else
-    {
-        std::cout << "How many particles do you want?: ";
-        std::cin >> N;
-
-        particles.resize(N, Particle(ma));
-        random_init_conditions(particles);
-        std::cout << "Set Random Initial Conditions to all particles!" << std::endl;
-    }
-
-    std::cout << "How many timesteps do you want?: ";
-    std::cin >> steps;
-    std::cout << "What dt do you want?: ";
-    std::cin >> dt;
-
-    std::string file_name = "";
-    std::cout << "What would you like to name this file?: ";
-    std::cin >> file_name;
-    std::ofstream gas_file;
-    std::string data_folder = "data";
-    gas_file.open(data_folder + "\\" + file_name + ".txt");
-
-    write_columns(gas_file);
-
     for (int i = 0; i < steps; ++i)
     {
-        verlet(particles, i, file_name, gas_file);
+        verlet(particles, i);
     }
-
-    gas_file.close();
     return EXIT_SUCCESS;
 }
