@@ -8,7 +8,6 @@
 #include "vector3d.cpp"
 #include "rng.cpp"
 
-
 #define K_B 1.380649E-23
 #define u 1.660538921E-24
 
@@ -17,7 +16,7 @@ const double epsilon = 125.7 * K_B;                     // Lennard-Jones potenti
 const double sigma = 0.3345E-9;                         // Lennard-Jones potential parameter
 const double ma = 39.948 * u;                           // Reference mass (particle mass)
 const double t0 = sqrt((ma * pow(sigma, 2)) / epsilon); // Reference time
-const double box_size = sigma * 2 / sigma;
+const double box_size = 2;
 const double dimentionless_mass = ma / ma;
 const double half_box = box_size / 2.0;
 int N;
@@ -49,15 +48,16 @@ vec lj_force(vec r1, vec r2)
 
 vec dimensionless_lj(vec r1, vec r2)
 {
-    //std::cout << "r1" << r1 << std::endl;
-    //std::cout << "r2" << r2 << std::endl;
+    // std::cout << "r1" << r1 << std::endl;
+    // std::cout << "r2" << r2 << std::endl;
     vec diff = r2 - r1;
-    //std::cout << "diff" << diff << std::endl;
-    double r_mag = diff.length() / sigma;
+    // std::cout << "diff" << diff << std::endl;
+    double r_mag = diff.length();
+    std::cout << r_mag << std::endl;
     vec r_hat = diff / r_mag;
-    //std::cout << "r_mag" << r_mag << std::endl;
-    //std::cout << "r_hat" << r_hat << std::endl;
-    //std::cout << ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) << std::endl;
+    // std::cout << "r_mag" << r_mag << std::endl;
+    // std::cout << "r_hat" << r_hat << std::endl;
+    // std::cout << ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) << std::endl;
     return ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) * r_hat;
 };
 
@@ -129,19 +129,19 @@ void verlet(std::vector<Particle> &particles, int step, std::string file_name, s
     for (int i = 0; i < N; ++i)
     {
         write_data(particles[i], i, step, gas_file);
-        //std::cout << "v " << particles[i].v << i << std::endl;
+        // std::cout << "v " << particles[i].v << i << std::endl;
         particles[i].v.set(particles[i].v.x() + 0.5 * dt * particles[i].a.x(), particles[i].v.y() + 0.5 * dt * particles[i].a.y(), particles[i].v.z() + 0.5 * dt * particles[i].a.z());
-        //std::cout << "r " << particles[i].r << i << std::endl;
+        // std::cout << "r " << particles[i].r << i << std::endl;
         particles[i].r.set(particles[i].r.x() + dt * particles[i].v.x(), particles[i].r.y() + dt * particles[i].v.y(), particles[i].r.z() + dt * particles[i].v.z());
         check_periodic_conditions(particles[i]);
     }
 
     for (int i = 0; i < N; ++i)
     {
-        // particles[i].a.set(0, 0, 0);
+        particles[i].a.set(0,0,0);
         for (int j = 0; j < N; ++j)
         {
-            //std::cout << "a " << particles[i].a << i << std::endl;
+            // std::cout << "a " << particles[i].a << i << std::endl;
             if (i != j)
             {
                 vec force = dimensionless_lj(particles[i].r, particles[j].r);
@@ -167,6 +167,35 @@ void random_init_conditions(std::vector<Particle> &particles)
     for (int i = 0; i < N; ++i)
     {
         particles[i].r.set(rand_x[i], rand_y[i], rand_z[i]);
+        // particles[i].v.set(0.2, 0.2, 0.2);
+    }
+}
+
+void lattice_init_conditions(std::vector<Particle> &particles)
+{
+    // Calculate the number of particles along each axis
+    int num_per_axis = ceil(pow(N, 1.0 / 3.0));
+
+    // Initialize particles with evenly spaced positions around the origin
+    int index = 0;
+    for (int i = 0; i < num_per_axis; ++i)
+    {
+        for (int j = 0; j < num_per_axis; ++j)
+        {
+            for (int k = 0; k < num_per_axis; ++k)
+            {
+                if (index >= N)
+                    break; // Prevent out-of-bounds access
+
+                // Calculate the position of the particle along each axis
+                double x = (i - num_per_axis / 2.0) * 1;
+                double y = (j - num_per_axis / 2.0) * 1;
+                double z = (k - num_per_axis / 2.0) * 1;
+
+                particles[index].r.set(x, y, z);
+                index += 1;
+            }
+        }
     }
 }
 
@@ -181,8 +210,8 @@ int main()
         std::cout << "Will set initial coniditons accordingly.\nn is now = 2" << std::endl;
         N = 2;
         particles.resize(N, Particle(ma)); // Resize particles vector
-        particles[0].r.set(sigma, 0, 0);
-        particles[1].r.set(-sigma, 0, 0);
+        particles[0].r.set(0.5, 0, 0);
+        particles[1].r.set(-0.5, 0, 0);
     }
 
     else
@@ -191,14 +220,28 @@ int main()
         std::cin >> N;
 
         particles.resize(N, Particle(ma));
-        random_init_conditions(particles);
-        std::cout << "Set Random Initial Conditions to all particles!" << std::endl;
+        std::string init_cond = "";
+        std::cout << "What Init Conditions would you Like?\n- Random\n- Lattice\n ";
+        std::cin >> init_cond;
+        if (init_cond == "Random")
+        {
+            random_init_conditions(particles);
+            std::cout << "Set Random Initial Conditions to all particles!" << std::endl;
+        }
+
+        else if (init_cond == "Lattice")
+        {
+            lattice_init_conditions(particles);
+            std::cout << "Set Lattice Initial Conditions to all particles!" << std::endl;
+        }
+        
     }
 
     std::cout << "How many timesteps do you want?: ";
     std::cin >> steps;
     std::cout << "What dt do you want?: ";
     std::cin >> dt;
+    dt = dt;
 
     std::string file_name = "";
     std::cout << "What would you like to name this file?: ";
