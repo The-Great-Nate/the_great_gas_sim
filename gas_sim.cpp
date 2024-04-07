@@ -27,8 +27,15 @@ struct Particle
 {
     vec a, v, r;
     double mass;
+    double PE = 0;
     Particle(double mass_) { mass = mass_; };
 };
+
+vec calculate_kinetic_energy(const Particle particle)
+{
+    vec E_k = vec(0.5 * particle.mass, 0.5 * particle.mass, 0.5 * particle.mass) * particle.v.pow(2);
+    return E_k;
+}
 
 double lj_pot(vec r1, vec r2)
 {
@@ -46,31 +53,32 @@ vec lj_force(vec r1, vec r2)
     return ((24.0 * epsilon) / sigma) * (-2.0 * (pow(sigma / r_mag, 13)) + (pow(sigma / r_mag, 7))) * r_hat;
 };
 
-vec dimensionless_lj(vec r1, vec r2)
+double dimensionless_lj_pot(vec r1, vec r2)
 {
-    // std::cout << "r1" << r1 << std::endl;
-    // std::cout << "r2" << r2 << std::endl;
     vec diff = r2 - r1;
-    // std::cout << "diff" << diff << std::endl;
+    double r = diff.length();
+    double r_term = pow(1 / r, 12) - pow(1 / r, 6);
+    return 4.0 * r_term;
+};
+
+vec dimensionless_lj_force(vec r1, vec r2)
+{
+    vec diff = r2 - r1;
     double r_mag = diff.length();
-    std::cout << r_mag << std::endl;
     vec r_hat = diff / r_mag;
-    // std::cout << "r_mag" << r_mag << std::endl;
-    // std::cout << "r_hat" << r_hat << std::endl;
-    // std::cout << ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) << std::endl;
     return ((24.0 * 1.0) / 1.0) * (-2.0 * (pow(1.0 / r_mag, 13)) + (pow(1.0 / r_mag, 7))) * r_hat;
 };
 
 void write_data(const Particle particle, int n, int step, std::ofstream &gas_file)
 {
-
-    // gas_file << "x\ty\tz\tvx\tvy\tvz\tax\tay\taz\n";
     if (gas_file.is_open())
     {
+        vec KE = calculate_kinetic_energy(particle);
         gas_file << dt * step << "\t" << n << "\t"
                  << particle.r.x() << "\t" << particle.r.y() << "\t" << particle.r.z() << "\t"
                  << particle.v.x() << "\t" << particle.v.y() << "\t" << particle.v.z() << "\t"
-                 << particle.a.x() << "\t" << particle.a.y() << "\t" << particle.a.z() << "\n";
+                 << particle.a.x() << "\t" << particle.a.y() << "\t" << particle.a.z() << "\t"
+                 << KE.x() << "\t" << KE.y() << "\t" << KE.z() << "\t" << particle.PE << "\n";
     }
 }
 
@@ -78,7 +86,7 @@ void write_columns(std::ofstream &gas_file)
 {
     if (gas_file.is_open())
     {
-        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\n";
+        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\tKEx\tKEy\tKEz\tPE\n";
     }
 }
 
@@ -88,39 +96,33 @@ void check_periodic_conditions(Particle &particle)
     {
         particle.r.set(half_box, particle.r.y(), particle.r.z());
         particle.v.set(-particle.v.x(), particle.v.y(), particle.v.z());
-        // std::cout << "Out of Bound Positively X" << std::endl;
     }
     else if (particle.r.x() < -half_box)
     {
         particle.r.set(-half_box, particle.r.y(), particle.r.z());
         particle.v.set(-particle.v.x(), particle.v.y(), particle.v.z());
-        // std::cout << "Out of Bound Negatively X" << std::endl;
     }
 
     if (particle.r.y() > half_box)
     {
         particle.r.set(particle.r.x(), half_box, particle.r.z());
         particle.v.set(particle.v.x(), -particle.v.y(), particle.v.z());
-        // std::cout << "Out of Bound Positively Y" << std::endl;
     }
     else if (particle.r.y() < -half_box)
     {
         particle.r.set(particle.r.x(), -half_box, particle.r.z());
         particle.v.set(particle.v.x(), -particle.v.y(), particle.v.z());
-        // std::cout << "Out of Bound Negatively Y" << std::endl;
     }
 
     if (particle.r.z() > half_box)
     {
         particle.r.set(particle.r.x(), particle.r.y(), half_box);
         particle.v.set(particle.v.x(), particle.v.y(), -particle.v.z());
-        // std::cout << "Out of Bound Positively Z" << std::endl;
     }
     else if (particle.r.z() < -half_box)
     {
         particle.r.set(particle.r.x(), particle.r.y(), -half_box);
         particle.v.set(particle.v.x(), particle.v.y(), -particle.v.z());
-        // std::cout << "Out of Bound Negavitvely Z" << std::endl;
     }
 }
 
@@ -129,22 +131,22 @@ void verlet(std::vector<Particle> &particles, int step, std::string file_name, s
     for (int i = 0; i < N; ++i)
     {
         write_data(particles[i], i, step, gas_file);
-        // std::cout << "v " << particles[i].v << i << std::endl;
         particles[i].v.set(particles[i].v.x() + 0.5 * dt * particles[i].a.x(), particles[i].v.y() + 0.5 * dt * particles[i].a.y(), particles[i].v.z() + 0.5 * dt * particles[i].a.z());
-        // std::cout << "r " << particles[i].r << i << std::endl;
         particles[i].r.set(particles[i].r.x() + dt * particles[i].v.x(), particles[i].r.y() + dt * particles[i].v.y(), particles[i].r.z() + dt * particles[i].v.z());
         check_periodic_conditions(particles[i]);
     }
 
     for (int i = 0; i < N; ++i)
     {
-        particles[i].a.set(0,0,0);
+        particles[i].a.set(0, 0, 0);
+        particles[i].PE = 0;
         for (int j = 0; j < N; ++j)
         {
-            // std::cout << "a " << particles[i].a << i << std::endl;
             if (i != j)
             {
-                vec force = dimensionless_lj(particles[i].r, particles[j].r);
+
+                vec force = dimensionless_lj_force(particles[i].r, particles[j].r);
+                particles[i].PE += dimensionless_lj_pot(particles[i].r, particles[j].r);
                 particles[i].a += force;
             }
         }
@@ -156,7 +158,7 @@ void verlet(std::vector<Particle> &particles, int step, std::string file_name, s
     }
 }
 
-void random_init_conditions(std::vector<Particle> &particles)
+void random_init_conditions(std::vector<Particle> &particles, std::ofstream &gas_file)
 {
     RandomNumbers rand_nums(N);
     rand_nums = generate(N, box_size);
@@ -167,11 +169,10 @@ void random_init_conditions(std::vector<Particle> &particles)
     for (int i = 0; i < N; ++i)
     {
         particles[i].r.set(rand_x[i], rand_y[i], rand_z[i]);
-        // particles[i].v.set(0.2, 0.2, 0.2);
     }
 }
 
-void lattice_init_conditions(std::vector<Particle> &particles)
+void lattice_init_conditions(std::vector<Particle> &particles, std::ofstream &gas_file)
 {
     // Calculate the number of particles along each axis
     int num_per_axis = ceil(pow(N, 1.0 / 3.0));
@@ -201,6 +202,15 @@ void lattice_init_conditions(std::vector<Particle> &particles)
 
 int main()
 {
+    std::string file_name = "";
+    std::cout << "What would you like to name this file?: ";
+    std::cin >> file_name;
+    std::ofstream gas_file;
+    std::string data_folder = "data";
+    gas_file.open(data_folder + "\\" + file_name + ".txt");
+
+    write_columns(gas_file);
+
     std::vector<Particle> particles;
     int check_bound;
     std::cout << "Would you like to check if 2 particles are bound to one another? (0 if no, 1 if yes): ";
@@ -225,32 +235,32 @@ int main()
         std::cin >> init_cond;
         if (init_cond == "Random")
         {
-            random_init_conditions(particles);
+            random_init_conditions(particles, gas_file);
             std::cout << "Set Random Initial Conditions to all particles!" << std::endl;
         }
 
         else if (init_cond == "Lattice")
         {
-            lattice_init_conditions(particles);
+            lattice_init_conditions(particles, gas_file);
             std::cout << "Set Lattice Initial Conditions to all particles!" << std::endl;
         }
-        
     }
 
     std::cout << "How many timesteps do you want?: ";
     std::cin >> steps;
     std::cout << "What dt do you want?: ";
     std::cin >> dt;
-    dt = dt;
 
-    std::string file_name = "";
-    std::cout << "What would you like to name this file?: ";
-    std::cin >> file_name;
-    std::ofstream gas_file;
-    std::string data_folder = "data";
-    gas_file.open(data_folder + "\\" + file_name + ".txt");
-
-    write_columns(gas_file);
+    for (int i = 0; i < N; ++i)
+    {
+        for (int j = 0; j < N; ++j)
+        {
+            if (i != j)
+            {
+                particles[i].PE += dimensionless_lj_pot(particles[i].r, particles[j].r);
+            }
+        }
+    }
 
     for (int i = 0; i < steps; ++i)
     {
