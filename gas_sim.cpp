@@ -23,6 +23,7 @@ const double dimentionless_mass = ma / ma;              // Dimentionless mass
 std::ofstream gas_file;
 std::string init_conditions;
 int N; // No. of Particles
+int duration;
 int steps;
 double dt; // Time step size
 double box_size;
@@ -302,7 +303,7 @@ void random_init_conditions(std::vector<Particle> &particles)
         particles[i].r.set(rand_x[i], rand_y[i], rand_z[i]);
     }
 }
-
+    
 /**
  * Places particles in a box as close to each other as possible before instability occurs
  *
@@ -405,10 +406,11 @@ int main()
         }
     }
 
-    std::cout << "How many timesteps do you want?: ";
-    std::cin >> steps;
     std::cout << "What dt do you want?: ";
     std::cin >> dt;
+    std::cout << "How long (in seconds) do you want the simulaion ran for?: ";
+    std::cin >> duration;
+    steps = duration/dt;
 
     write_params(gas_file);
     write_columns(gas_file);
