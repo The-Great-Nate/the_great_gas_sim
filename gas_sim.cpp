@@ -7,6 +7,7 @@
 #include <iomanip>
 #include "vector3d.cpp"
 #include "rng.cpp"
+#include <chrono>
 
 // Universal Physical Constants
 #define K_B 1.380649E-23
@@ -27,7 +28,6 @@ int duration;
 int steps;
 double dt; // Time step size
 double box_size;
-
 /**
  * Structure of a particle.
  *
@@ -303,7 +303,7 @@ void random_init_conditions(std::vector<Particle> &particles)
         particles[i].r.set(rand_x[i], rand_y[i], rand_z[i]);
     }
 }
-    
+
 /**
  * Places particles in a box as close to each other as possible before instability occurs
  *
@@ -410,8 +410,9 @@ int main()
     std::cin >> dt;
     std::cout << "How long (in seconds) do you want the simulaion ran for?: ";
     std::cin >> duration;
-    steps = duration/dt;
+    steps = duration / dt;
 
+    auto start = std::chrono::high_resolution_clock::now();
     write_params(gas_file);
     write_columns(gas_file);
 
@@ -433,7 +434,15 @@ int main()
         verlet(particles, i, half_box, gas_file);
     }
 
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+    auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
+    auto seconds = duration - minutes;
+    std::cout << "Simulation Runtime " << minutes.count() << ":" << seconds.count() << " seconds\n";
+    gas_file << minutes.count() << ":" << seconds.count();
+    
     // close gas file.
     gas_file.close();
+
     return EXIT_SUCCESS;
 }
