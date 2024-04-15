@@ -5,9 +5,10 @@
 #include <string>
 #include <filesystem>
 #include <iomanip>
+#include <chrono>
+#include <sstream>
 #include "vector3d.cpp"
 #include "rng.cpp"
-#include <chrono>
 
 // Universal Physical Constants
 #define K_B 1.380649E-23
@@ -21,7 +22,6 @@ const double t0 = sqrt((ma * pow(sigma, 2)) / epsilon); // Reference time
 const double dimentionless_mass = ma / ma;              // Dimentionless mass
 
 // Initialise variables
-std::ofstream gas_file;
 std::string init_conditions;
 int N; // No. of Particles
 int duration;
@@ -351,16 +351,6 @@ int main()
     std::cin >> box_size;
     const double half_box = box_size / 2.0;
 
-    // Asks user for file name.
-    std::string file_name = "";
-    std::cout << "What would you like to name this file?: ";
-    std::cin >> file_name;
-
-    // Create ofstream object and open txt file of file_name in data folder.
-    std::ofstream gas_file;
-    std::string data_folder = "data";
-    gas_file.open(data_folder + "\\" + file_name + ".txt");
-
     // Initialise Particle vector
     std::vector<Particle> particles;
 
@@ -412,6 +402,34 @@ int main()
     std::cin >> duration;
     steps = duration / dt;
 
+    /* Creates ofstream object and open txt file of file_name in data folder.
+    Makes filename from parameters of system.
+    */
+    std::ofstream gas_file;
+    std::string data_folder = "data";
+
+    /* Truncates trailing 0's from double variables to be written as filename
+        the .str() later retrieves string from both ostringstream objects
+        .erase() removes characters from a string
+        .find_last_not_of() finds first character that doesnt match arguement in reverse order
+        std::string::npos entire string is searched.
+    */
+    std::string box_size_trunc = std::to_string(box_size);
+    std::string dt_trunc = std::to_string(dt);
+    box_size_trunc.erase(box_size_trunc.find_last_not_of('0') + 1, std::string::npos);
+    box_size_trunc.erase(box_size_trunc.find_last_not_of('.') + 1, std::string::npos);
+    dt_trunc.erase(dt_trunc.find_last_not_of('0') + 1, std::string::npos);
+    dt_trunc.erase(dt_trunc.find_last_not_of('.') + 1, std::string::npos);
+
+    // Making File based of system params
+    std::string file_name = "N_" + std::to_string(N) + "__" +
+                            "BX_" + box_size_trunc + "__" +
+                            "dt_" + dt_trunc + "__" +
+                            "duration_" + std::to_string(duration) + "__" +
+                            "init_cond_" + init_conditions;
+    gas_file.open(data_folder + "\\" + file_name + ".txt");
+
+    // Start the clock for how long this simulation takes to run
     auto start = std::chrono::high_resolution_clock::now();
     write_params(gas_file);
     write_columns(gas_file);
@@ -434,13 +452,14 @@ int main()
         verlet(particles, i, half_box, gas_file);
     }
 
+    // Stop the clock for how long this simulation takes to run
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
     auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
     auto seconds = duration - minutes;
-    std::cout << "Simulation Runtime " << minutes.count() << ":" << seconds.count() << " seconds\n";
-    gas_file << minutes.count() << ":" << seconds.count();
-    
+    std::cout << "Simulation Runtime " << minutes.count() << ":" << seconds.count() << " (MM:ss) \n";
+    gas_file << "duration=" << minutes.count() << ":" << seconds.count();
+
     // close gas file.
     gas_file.close();
 
