@@ -27,6 +27,8 @@ class Particles:
         Attributes
         ----------
         __database : Pandas Data Frame
+        __parameters : Dictionary of system parameters
+        __N, __dt, __steps, __box_size, __duration : Attributes storing each respective system parameter. Prevents running extract_parameters() & casts parameters to correct datatype.
         """
         self.file_path = f"data\{database_name}"
         self.__database = pd.read_csv(self.file_path, sep="\t", skiprows = 6)
