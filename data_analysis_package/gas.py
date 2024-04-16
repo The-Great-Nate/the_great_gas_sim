@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import seaborn as sns
+import os
 from IPython.display import display, HTML
 from sklearn import linear_model
 from sklearn.model_selection import train_test_split
@@ -18,7 +19,6 @@ class Particles:
     """
     This class holds a database positions, velocities, accelerations, kinetic and potential energies of particles..
     """
-
     def __init__(self, database_name: str) -> None:
         """
         Creates a private attribute of the database imported from a file.
@@ -31,6 +31,12 @@ class Particles:
         self.file_path = f"data\{database_name}"
         self.__database = pd.read_csv(self.file_path, sep="\t", skiprows = 6)
         self.__parameters = self.extract_parameters()
+        self.__database = self.__database[:-1]
+        self.N = int(self.__parameters["N"])
+        self.dt = float(self.__parameters["dt"])
+        self.steps = int(self.__parameters["steps"])
+        self.box_size = float(self.__parameters["box_size"])
+        self.duration = str(self.__parameters["duration"])
 
     def get_df(self) -> pd.DataFrame:
         """
@@ -61,9 +67,42 @@ class Particles:
                 break
             params = line.split("=")
             parameters[params[0]] = params[1]
+        last_line = lines[-1]
+        duration = last_line.split("=")
+        parameters[duration[0]] = duration[1]
         return parameters
 
+    def get_speed(self, data: pd.DataFrame = None) -> pd.Series:
+        """
+        Returns pandas series of particle's speed from performing pythagoras on each component.
+        :param data: if none, use __database. Otherwise use data passed in.
+        :return: pandas series of speeds
+        """
+        if data == None:
+            speeds = (self.__database["vx"]**2 + self.__database["vy"]**2 + self.__database["vz"]**2)**(1/2)
+            return speeds
+        else:
+            speeds = (data["vx"]**2 + data["vy"]**2 + data["vz"]**2)**(1/2)
+            return speeds
 
+    def get_total_kinetic_per_step(self) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of the total kinetic energy of the system during each timestep.
+        :return: pandas DataFrame of time and total kinetic energy
+        """
+        temp_data = self.__database.copy()
+        temp_data["speed"] = self.get_speed()
+        time_steps = np.arange(0, self.steps * self.dt, self.dt)
+        KE_s = np.zeros(self.steps)
+        temp_data["KE"] = 0.5 * (temp_data["speed"]**2)
+        for time, group in temp_data.groupby("t"):
+            total_ke_time = np.sum(group["KE"])
+            KE_s[int(float(time)/self.dt)] = total_ke_time
+        KEt_df = pd.DataFrame({"t":time_steps, "Total Kinetic Energy per Timestep":KE_s})
+        return KEt_df
+    
+    def get_file_size(self) -> float:
+        return os.path.getsize(self.file_path)
 
     def display_data_info(self) -> None:
         """
@@ -128,7 +167,7 @@ class Particles:
         plt.title("Correlation Heatmap")
         plt.show()
 
-    def return_particle_data(self, name: str) -> Union[None, pd.DataFrame]:
+    def return_particle_data(self, name: int) -> Union[None, pd.DataFrame]:
         """
         Returns record of particle index is assigned to
         :param name: particle index to return record for.
@@ -370,7 +409,6 @@ class Particles:
         """
 
         # Initialise figure, particle data frames and points to plot
-        box_size = float(self.__parameters["box_size"])
         dfs = {}
         points = []
         fig, ax = plt.subplots(figsize=(8, 6))
@@ -385,8 +423,8 @@ class Particles:
             points.append(point)
 
         # Set limits on x and y axis to be 0.5 box size to emulate box and better illustrate rebounds
-        ax.set_xlim(-box_size/2.0, box_size/2.0)
-        ax.set_ylim(-box_size/2.0, box_size/2.0)
+        ax.set_xlim(-self.box_size/2.0, self.box_size/2.0)
+        ax.set_ylim(-self.box_size/2.0, self.box_size/2.0)
 
         # Set label of axis to the axis passed in
         ax.set_xlabel(axis1)
@@ -426,7 +464,6 @@ class Particles:
         :return: animation object. Main purpose is in case the user is using this package in a jupyter notebook.
         """
         # Initialise figure, particle data frames and points to plot
-        box_size = float(self.__parameters["box_size"])
         dfs = {}
         points = []
         fig = plt.figure()
@@ -441,9 +478,9 @@ class Particles:
             points.append(point)
             
         # Set limits on x y z axis to be 0.5 box size to emulate box and better illustrate rebounds
-        ax.set_xlim(-box_size/2.0, box_size/2.0)
-        ax.set_ylim(-box_size/2.0, box_size/2.0)
-        ax.set_zlim(-box_size/2.0, box_size/2.0)
+        ax.set_xlim(-self.box_size/2.0, self.box_size/2.0)
+        ax.set_ylim(-self.box_size/2.0, self.box_size/2.0)
+        ax.set_zlim(-self.box_size/2.0, self.box_size/2.0)
         
         # Set label of axis to the axis passed in
         ax.set_xlabel("x")
