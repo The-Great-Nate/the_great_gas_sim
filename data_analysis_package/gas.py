@@ -32,11 +32,11 @@ class Particles:
         self.__database = pd.read_csv(self.file_path, sep="\t", skiprows = 6)
         self.__parameters = self.extract_parameters()
         self.__database = self.__database[:-1]
-        self.N = int(self.__parameters["N"])
-        self.dt = float(self.__parameters["dt"])
-        self.steps = int(self.__parameters["steps"])
-        self.box_size = float(self.__parameters["box_size"])
-        self.duration = str(self.__parameters["duration"])
+        self.__N = int(self.__parameters["N"])
+        self.__dt = float(self.__parameters["dt"])
+        self.__steps = int(self.__parameters["steps"])
+        self.__box_size = float(self.__parameters["box_size"])
+        self.__duration = str(self.__parameters["duration"])
 
     def get_df(self) -> pd.DataFrame:
         """
@@ -44,6 +44,41 @@ class Particles:
         :return: dataframe in __database
         """
         return self.__database
+    
+    def get_N(self) -> int:
+        """
+        Returns the value of __N.
+        :return: N
+        """
+        return self.__N
+    
+    def get_dt(self) -> float:
+        """
+        Returns the value of __dt.
+        :return: dataframe in __dt
+        """
+        return self.__dt
+    
+    def get_steps(self) -> int:
+        """
+        Returns the value of __steps.
+        :return: dataframe in __steps
+        """
+        return self.__steps
+    
+    def get_box_size(self) -> float:
+        """
+        Returns the value of __box_size.
+        :return: dataframe in __box_size
+        """
+        return self.__box_size
+    
+    def get_duration(self) -> str:
+        """
+        Returns the value of __duration.
+        :return: dataframe in __duration
+        """
+        return self.__duration
 
     def set_df(self, df: pd.DataFrame) -> None:
         """
@@ -92,12 +127,12 @@ class Particles:
         """
         temp_data = self.__database.copy()
         temp_data["speed"] = self.get_speed()
-        time_steps = np.arange(0, self.steps * self.dt, self.dt)
-        KE_s = np.zeros(self.steps)
+        time_steps = np.arange(0, self.__steps * self.__dt, self.__dt)
+        KE_s = np.zeros(self.__steps)
         temp_data["KE"] = 0.5 * (temp_data["speed"]**2)
         for time, group in temp_data.groupby("t"):
             total_ke_time = np.sum(group["KE"])
-            KE_s[int(float(time)/self.dt)] = total_ke_time
+            KE_s[int(float(time)/self.__dt)] = total_ke_time
         KEt_df = pd.DataFrame({"t":time_steps, "Total Kinetic Energy per Timestep":KE_s})
         return KEt_df
     
@@ -423,8 +458,8 @@ class Particles:
             points.append(point)
 
         # Set limits on x and y axis to be 0.5 box size to emulate box and better illustrate rebounds
-        ax.set_xlim(-self.box_size/2.0, self.box_size/2.0)
-        ax.set_ylim(-self.box_size/2.0, self.box_size/2.0)
+        ax.set_xlim(-self.__box_size/2.0, self.__box_size/2.0)
+        ax.set_ylim(-self.__box_size/2.0, self.__box_size/2.0)
 
         # Set label of axis to the axis passed in
         ax.set_xlabel(axis1)
@@ -478,9 +513,9 @@ class Particles:
             points.append(point)
             
         # Set limits on x y z axis to be 0.5 box size to emulate box and better illustrate rebounds
-        ax.set_xlim(-self.box_size/2.0, self.box_size/2.0)
-        ax.set_ylim(-self.box_size/2.0, self.box_size/2.0)
-        ax.set_zlim(-self.box_size/2.0, self.box_size/2.0)
+        ax.set_xlim(-self.__box_size/2.0, self.__box_size/2.0)
+        ax.set_ylim(-self.__box_size/2.0, self.__box_size/2.0)
+        ax.set_zlim(-self.__box_size/2.0, self.__box_size/2.0)
         
         # Set label of axis to the axis passed in
         ax.set_xlabel("x")
