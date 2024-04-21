@@ -54,7 +54,7 @@ struct Particle
  * */
 vec calculate_kinetic_energy(const Particle particle)
 {
-    vec E_k = vec(0.5 * particle.mass, 0.5 * particle.mass, 0.5 * particle.mass) * particle.v.pow(2);
+    vec E_k = vec(0.5 * particle.mass, 0.5 * particle.mass, 0.5 * particle.mass) * (particle.v.pow(2));
     return E_k;
 }
 
@@ -368,6 +368,8 @@ int main()
         // Space particles 1 sigma apart.
         particles[0].r.set(0.5, 0, 0);
         particles[1].r.set(-0.5, 0, 0);
+        particles[0].v.set(0.01, 0, 0);
+        particles[1].v.set(-0.01, 0, 0);
     }
 
     else
