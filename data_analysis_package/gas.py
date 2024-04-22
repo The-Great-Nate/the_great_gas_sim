@@ -19,11 +19,11 @@ class Particles:
     """
     This class holds a database positions, velocities, accelerations, kinetic and potential energies of particles..
     """
-    def __init__(self, database_name: str) -> None:
+    def __init__(self, database_name:Union[str, pd.DataFrame]) -> None:
         """
         Creates a private attribute of the database imported from a file.
         :param database_name (string) : The name the database file in the filesystem.
-
+        :param database_name (pd.DataFrame) : The DataFrame so methods of this class can be used.
         Attributes
         ----------
         __database : Pandas Data Frame
@@ -138,8 +138,114 @@ class Particles:
         KEt_df = pd.DataFrame({"t":time_steps, "Total Kinetic Energy per Timestep":KE_s})
         return KEt_df
     
+    def get_total_potential_per_step(self) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of the total potential energy of the system during each timestep.
+        :return: pandas DataFrame of time and total potential energy
+        """
+        temp_data = self.__database.copy()
+        time_steps = np.arange(0, self.__steps * self.__dt, self.__dt)
+        PE_s = np.zeros(self.__steps)
+        for time, group in temp_data.groupby("t"):
+            total_pe_time = np.sum(group["PE"])
+            PE_s[int(float(time)/self.__dt)] = total_pe_time
+        PEt_df = pd.DataFrame({"t":time_steps, "Total Potential Energy per Timestep":PE_s})
+        return PEt_df
+    
+    def resample_by_mean(self, time_step:str, df:pd.DataFrame = None) -> pd.DataFrame:
+        if df is None:
+            resampled_data = self.__database.copy()
+            if "n" not in list(resampled_data.columns):
+                return
+            else:
+                resampled_df = pd.DataFrame({})
+                for n, group in resampled_data.groupby("n"):
+                    group["t"] = pd.to_numeric(group["t"], errors="coerce")
+                    group.index = pd.to_timedelta(group["t"], unit="s")
+                    group = group.resample(time_step).mean()
+                    resampled_df = pd.concat([resampled_df, group], ignore_index=True)
+                resampled_df = resampled_df.sort_values("t")
+                resampled_df.reset_index(inplace=True, drop = True)
+                return resampled_df
+        else:
+            resampled_data = df
+            if "n" not in list(resampled_data.columns):
+                resampled_data["t"] = pd.to_numeric(resampled_data["t"], errors="coerce")
+                resampled_data.index = pd.to_timedelta(resampled_data["t"], unit="s")
+                resampled_data = resampled_data.resample(time_step).mean()
+                return resampled_data
+            else:
+                resampled_df = pd.DataFrame({})
+                for n, group in resampled_data.groupby("n"):
+                    group["t"] = pd.to_numeric(group["t"], errors="coerce")
+                    group.index = pd.to_timedelta(group["t"], unit="s")
+                    group = group.resample(time_step).mean()
+                    resampled_df = pd.concat([resampled_df, group], ignore_index=True)
+                resampled_df = resampled_df.sort_values("t")
+                resampled_df.reset_index(inplace=True, drop = True)
+                return resampled_df
+            
+
+    def get_percent_errs_over_duration(self, data, time:pd.Series = None, col = None, plot:bool = False, save:bool = False):
+        if isinstance(data, str):
+            if data not in list(self.__database.columns):
+                durations = np.arange(0, self.__dt * self.__steps, self.__dt)
+                percent_errs = np.zeros(self.__steps)
+                for i in range(self.__steps):
+                    if i == 0:
+                        pass
+                    else:
+                        mean_no_resample = self.get_mean(self.__database[:i][data])
+                        std_err_no_resample = self.get_standard_error(self.__database[:i][data])
+                        percent_err = np.abs(std_err_no_resample / mean_no_resample)
+                        percent_errs[i] = percent_err
+
+                    if plot == True:
+                        plt.figure(figsize=(10,6))
+                        plt.plot(durations, percent_errs)
+                        plt.xlabel("duration (s)")
+                        plt.ylabel("Percentage Error")
+                        plt.title("Percentage Error against The Duration the Simulation was Ran")
+                        if save == True:
+                            plt.savefig(f"duration_plot_{self.file_path[6:]}_{data}.pdf", format="pdf")
+                        plt.show()
+                return durations, percent_errs
+        if isinstance(data, pd.DataFrame):
+            if time is None:
+                if col is None:
+                    raise TypeError("get_percent_errs_over_duration() must have parameter for \"col\" if inputting data frame.")
+                
+                time_diffs = np.diff(data["t"])
+                dt = np.mean(time_diffs)
+                steps = len(data)
+                durations = np.arange(0, dt * steps, dt)
+                percent_errs = np.zeros(steps)
+                for i in range(steps):
+                    if i == 0:
+                        pass
+                    else:
+                        mean_no_resample = self.get_mean(data[:i][col])
+                        std_err_no_resample = self.get_standard_error(data[:i][col])
+                        percent_err = np.abs(std_err_no_resample / mean_no_resample)
+                        percent_errs[i] = percent_err
+
+                if plot == True:
+                    plt.figure(figsize=(10,6))
+                    plt.plot(durations, percent_errs)
+                    plt.xlabel("duration (s)")
+                    plt.ylabel("Percentage Error")
+                    plt.title("Percentage Error against The Duration the Simulation was Ran")
+                    if save == True:
+                        plt.savefig(f"duration_plot_{self.file_path[6:]}_{col}.pdf", format="pdf")
+                    plt.show()
+                return durations, percent_errs
+
     def get_file_size(self) -> float:
         return os.path.getsize(self.file_path)
+
+    def concat(self, dfs:list[pd.DataFrame], join:str = "Outer", axis:int = 1):
+        return pd.concat(dfs, join = join, axis = axis)
+    
 
     def display_data_info(self) -> None:
         """
@@ -435,9 +541,26 @@ class Particles:
         print(f"r2_score: {r2}")
         print(f"root mean squared error: {rmse}")
         return r2, rmse
+    
+    def get_mean(self, vals:pd.Series = None):
+        if vals is None:
+            raise TypeError("get_mean() missing 1 required positional argument: \"vals\"")
+        else:    
+            mean = np.mean(vals)
+            return mean
+
+    def get_standard_error(self, vals:pd.Series = None):
+        if vals is None:
+            raise TypeError("get_standard_error() missing 1 required positional argument: \"vals\"")
+        else:    
+            standard_errors = np.std(vals) / np.sqrt(len(vals))
+            return standard_errors
+        
 
     def make_animation_2d(self, axis1: str , axis2: str, save: bool = True) -> animation:
         """
+        WARNING: PLEASE MAKE SURE FFMPEG IS INSTALLED
+        ---------------------------------------------------------
         Renders an animation of the motion of the particles in 2d.
         :param axis1: first axis to plot.
         :param axis2: second axis to plot.
@@ -451,7 +574,7 @@ class Particles:
         fig, ax = plt.subplots(figsize=(8, 6))
 
         # Put data frames of each particle into the dfs dictionary
-        for i in range(np.max(self.__database["n"]) + 1):
+        for i in range(int(np.max(self.__database["n"])) + 1):
             p_df = self.return_particle_data(name = i)
             p_df.reset_index(inplace = True)
             dfs[i] = p_df
@@ -496,6 +619,8 @@ class Particles:
 
     def make_animation_3d(self, save: bool = True) -> animation:
         """
+        WARNING: PLEASE MAKE SURE FFMPEG IS INSTALLED
+        ---------------------------------------------------------
         Renders an animation of the motion of the particles in 3d.
         :param save: If true, save the animation as an MP4 file.
         :return: animation object. Main purpose is in case the user is using this package in a jupyter notebook.
@@ -507,7 +632,7 @@ class Particles:
         ax = fig.add_subplot(projection='3d')
 
         # Put data frames of each particle into the dfs dictionary
-        for i in range(np.max(self.__database["n"]) + 1):
+        for i in range(int(np.max(self.__database["n"])) + 1):
             p_df = self.return_particle_data(name = i)
             p_df.reset_index(inplace = True)
             dfs[i] = p_df
