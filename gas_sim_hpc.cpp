@@ -186,7 +186,7 @@ void write_columns(std::ofstream &gas_file)
  * @param[in] particle particle in question
  * @param[in] half_box maximum co ordinate (positive and negative) particle can be at
  * */
-void check_periodic_conditions(Particle &particle, const double half_box)
+void check_boundary_conditions(Particle &particle, const double half_box)
 {
     if (particle.r.x() > half_box)
     {
@@ -240,7 +240,7 @@ void verlet(std::vector<Particle> &particles, int step, const double half_box, s
         write_data(particles[i], i, step, gas_file);
         particles[i].v.set(particles[i].v.x() + 0.5 * dt * particles[i].a.x(), particles[i].v.y() + 0.5 * dt * particles[i].a.y(), particles[i].v.z() + 0.5 * dt * particles[i].a.z());
         particles[i].r.set(particles[i].r.x() + dt * particles[i].v.x(), particles[i].r.y() + dt * particles[i].v.y(), particles[i].r.z() + dt * particles[i].v.z());
-        check_periodic_conditions(particles[i], half_box);
+        check_boundary_conditions(particles[i], half_box);
     }
 
     // Update acceleration through summing forces from each particle
