@@ -45,20 +45,6 @@ struct Particle
 };
 
 /**
- * Calculates kinetic energy in each axis.
- *
- * E_k = 0.5 * mass * v^2   with v in each axis.
- *
- * @param[in] particle a particle.
- * @return vec E_k vec holding the energy of the particle in the 3 axis.
- * */
-vec calculate_kinetic_energy(const Particle particle)
-{
-    vec E_k = vec(0.5 * particle.mass, 0.5 * particle.mass, 0.5 * particle.mass) * (particle.v.pow(2));
-    return E_k;
-}
-
-/**
  * Calculates potential energy.
  *
  * Uses the Lennard-Jones potential
@@ -139,7 +125,6 @@ vec dimensionless_lj_force(vec r1, vec r2)
 
 /**
  * Writes attributes of particle into text file.
- * Additionally it's index and kinetic energy from calculate_kinetic_energy().
  *
  * Seperates each attribute with a tab.
  *
@@ -150,12 +135,11 @@ void write_data(const Particle particle, int n, int step, std::ofstream &gas_fil
 {
     if (gas_file.is_open())
     {
-        vec KE = calculate_kinetic_energy(particle);
         gas_file << dt * step << "\t" << n << "\t"
                  << particle.r.x() << "\t" << particle.r.y() << "\t" << particle.r.z() << "\t"
                  << particle.v.x() << "\t" << particle.v.y() << "\t" << particle.v.z() << "\t"
                  << particle.a.x() << "\t" << particle.a.y() << "\t" << particle.a.z() << "\t"
-                 << KE.x() << "\t" << KE.y() << "\t" << KE.z() << "\t" << particle.PE << "\n";
+                 << particle.PE << "\n";
     }
 }
 
@@ -189,7 +173,7 @@ void write_columns(std::ofstream &gas_file)
 {
     if (gas_file.is_open())
     {
-        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\tKEx\tKEy\tKEz\tPE\n";
+        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\tPE\n";
     }
 }
 
