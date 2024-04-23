@@ -1,5 +1,5 @@
 '''
-This code was adapted from SCIF20002 assessment 01
+This code was adapted from SCIF20002 assessment 01. The class has been repurposed to serve gas_sim.cpp
 '''
 
 import numpy as np
@@ -33,12 +33,15 @@ class Particles:
         self.file_path = f"data\{database_name}"
         self.__database = pd.read_csv(self.file_path, sep="\t", skiprows = 6)
         self.__parameters = self.extract_parameters()
-        self.__database = self.__database[:-1]
+        self.__database = self.__database[:-4]
         self.__N = int(self.__parameters["N"])
         self.__dt = float(self.__parameters["dt"])
         self.__steps = int(self.__parameters["steps"])
         self.__box_size = float(self.__parameters["box_size"])
         self.__duration = str(self.__parameters["duration"])
+        self.__pressure_x = float(self.__parameters["pressure_x"])
+        self.__pressure_y = float(self.__parameters["pressure_y"])
+        self.__pressure_z = float(self.__parameters["pressure_z"])
 
     def get_df(self) -> pd.DataFrame:
         """
@@ -104,9 +107,10 @@ class Particles:
                 break
             params = line.split("=")
             parameters[params[0]] = params[1]
-        last_line = lines[-1]
-        duration = last_line.split("=")
-        parameters[duration[0]] = duration[1]
+        for i in range(-1,-5,-1):
+            line = lines[i]
+            params = line.split("=")
+            parameters[params[0]] = params[1]
         return parameters
 
     def get_speed(self, data: pd.DataFrame = None) -> pd.Series:
@@ -236,7 +240,10 @@ class Particles:
                     plt.ylabel("Percentage Error")
                     plt.title("Percentage Error against The Duration the Simulation was Ran")
                     if save == True:
-                        plt.savefig(f"duration_plot_{self.file_path[6:]}_{col}.pdf", format="pdf")
+                        if dt != self.__dt:
+                            plt.savefig(f"duration_plot_{self.file_path[6:]}_{col}_RESAMPLED_{dt}.pdf", format="pdf")
+                        else:
+                            plt.savefig(f"duration_plot_{self.file_path[6:]}_{col}.pdf", format="pdf")
                     plt.show()
                 return durations, percent_errs
 
