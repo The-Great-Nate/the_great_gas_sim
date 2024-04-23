@@ -166,7 +166,6 @@ void write_params(std::ofstream &gas_file)
 
 /**
  * Writes columns into text file.
-
  * @param[in] gas_file file object for data to be written to.
  * */
 void write_columns(std::ofstream &gas_file)
@@ -181,14 +180,20 @@ void write_columns(std::ofstream &gas_file)
  * Check if particle's position update is out of bounds of box
  *
  * If it is, put back in box and flip velocity direction for whichever axis this applies to
+ * Also adds overall momentum to momentum vector upon hitting wall on one plane of the 3 axis.
  *
  * @param[in] particle particle in question
  * @param[in] half_box maximum co ordinate (positive and negative) particle can be at
+ * @param[in] momentum total momentum so far.
  * */
-void check_periodic_conditions(Particle &particle, const double half_box)
+void check_boundary_conditions(Particle &particle, const double half_box, vec &momentum)
 {
+    double momentum_x = 0.0;
+    double momentum_y = 0.0;
+    double momentum_z = 0.0;
     if (particle.r.x() > half_box)
     {
+        momentum_x = particle.mass * particle.v.x();
         particle.r.set(half_box, particle.r.y(), particle.r.z());
         particle.v.set(-particle.v.x(), particle.v.y(), particle.v.z());
     }
@@ -200,6 +205,7 @@ void check_periodic_conditions(Particle &particle, const double half_box)
 
     if (particle.r.y() > half_box)
     {
+        momentum_y = particle.mass * particle.v.y();
         particle.r.set(particle.r.x(), half_box, particle.r.z());
         particle.v.set(particle.v.x(), -particle.v.y(), particle.v.z());
     }
@@ -211,6 +217,7 @@ void check_periodic_conditions(Particle &particle, const double half_box)
 
     if (particle.r.z() > half_box)
     {
+        momentum_z = particle.mass * particle.v.z();
         particle.r.set(particle.r.x(), particle.r.y(), half_box);
         particle.v.set(particle.v.x(), particle.v.y(), -particle.v.z());
     }
@@ -219,6 +226,7 @@ void check_periodic_conditions(Particle &particle, const double half_box)
         particle.r.set(particle.r.x(), particle.r.y(), -half_box);
         particle.v.set(particle.v.x(), particle.v.y(), -particle.v.z());
     }
+    momentum += vec(momentum_x, momentum_y, momentum_z);
 }
 
 /**
@@ -231,7 +239,7 @@ void check_periodic_conditions(Particle &particle, const double half_box)
  * @param[in] half_box maximum co ordinate (positive and negative) particle can be at.
  * @param[in] gas_file file object for data to be written to.
  * */
-void verlet(std::vector<Particle> &particles, int step, const double half_box, std::ofstream &gas_file)
+void verlet(std::vector<Particle> &particles, int step, const double half_box, std::ofstream &gas_file, vec &momentum)
 {
     // Perform write_data(), velocity and position updates on each particle.
     for (int i = 0; i < N; ++i)
@@ -239,7 +247,7 @@ void verlet(std::vector<Particle> &particles, int step, const double half_box, s
         write_data(particles[i], i, step, gas_file);
         particles[i].v.set(particles[i].v.x() + 0.5 * dt * particles[i].a.x(), particles[i].v.y() + 0.5 * dt * particles[i].a.y(), particles[i].v.z() + 0.5 * dt * particles[i].a.z());
         particles[i].r.set(particles[i].r.x() + dt * particles[i].v.x(), particles[i].r.y() + dt * particles[i].v.y(), particles[i].r.z() + dt * particles[i].v.z());
-        check_periodic_conditions(particles[i], half_box);
+        check_boundary_conditions(particles[i], half_box, momentum);
     }
 
     // Update acceleration through summing forces from each particle
@@ -348,7 +356,7 @@ int main()
         init_conditions = "sigma_spaced";
         std::cout << "Will set initial coniditons accordingly.\nn is now = 2" << std::endl;
         N = 2;
-        particles.resize(N, Particle(ma)); // Resize particles vector
+        particles.resize(N, Particle(dimentionless_mass)); // Resize particles vector
         // Space particles 1 sigma apart.
         particles[0].r.set(0.5, 0, 0);
         particles[1].r.set(-0.5, 0, 0);
@@ -361,7 +369,7 @@ int main()
         // Asks user for No. of particles.
         std::cout << "How many particles do you want?: ";
         std::cin >> N;
-        particles.resize(N, Particle(ma)); // Set particles vector to size N with mass ma
+        particles.resize(N, Particle(dimentionless_mass)); // Set particles vector to size N with mass ma
 
         // Asks user for initial conditions.
         std::string init_cond = "";
@@ -432,19 +440,30 @@ int main()
         }
     }
 
+    // Required to find pressure later.
+    vec momentum(0.0, 0.0, 0.0);
+
     // Vertlet loop begins!
     for (int i = 0; i < steps; ++i)
     {
-        verlet(particles, i, half_box, gas_file);
+        verlet(particles, i, half_box, gas_file, momentum);
     }
 
     // Stop the clock for how long this simulation takes to run
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
-    auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
-    auto seconds = duration - minutes;
+    auto sim_duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+    auto minutes = std::chrono::duration_cast<std::chrono::minutes>(sim_duration);
+    auto seconds = sim_duration - minutes;
     std::cout << "Simulation Runtime " << minutes.count() << ":" << seconds.count() << " (MM:ss) \n";
-    gas_file << "duration=" << minutes.count() << ":" << seconds.count();
+    gas_file << "duration=" << minutes.count() << ":" << seconds.count() << "\n";
+
+    // Pressure is related by total momentum / (box area * duration simulation was ran.)
+    double pressure_x = momentum.x() / (pow(box_size, 2) * duration);
+    double pressure_y = momentum.y() / (pow(box_size, 2) * duration);
+    double pressure_z = momentum.z() / (pow(box_size, 2) * duration);
+    gas_file << "pressure_x=" << pressure_x << "\n";
+    gas_file << "pressure_y=" << pressure_y << "\n";
+    gas_file << "pressure_z=" << pressure_z << "\n";
 
     // close gas file.
     gas_file.close();
