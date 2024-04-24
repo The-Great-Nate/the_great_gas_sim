@@ -131,7 +131,7 @@ vec dimensionless_lj_force(vec r1, vec r2)
  * @param[in] particle, n, step input data to write into file.
  * @param[in] gas_file file object for data to be written to.
  * */
-void write_data(const Particle particle, int n, int step, std::ofstream &gas_file)
+void write_data(const Particle particle, int n, int step, std::ofstream &gas_file, vec momentum_cross)
 {
     if (gas_file.is_open())
     {
@@ -139,7 +139,8 @@ void write_data(const Particle particle, int n, int step, std::ofstream &gas_fil
                  << particle.r.x() << "\t" << particle.r.y() << "\t" << particle.r.z() << "\t"
                  << particle.v.x() << "\t" << particle.v.y() << "\t" << particle.v.z() << "\t"
                  << particle.a.x() << "\t" << particle.a.y() << "\t" << particle.a.z() << "\t"
-                 << particle.PE << "\n";
+                 << particle.PE << "\t"
+                << momentum_cross.x() << "\t" << momentum_cross.y() << "\t" << momentum_cross.z() << "\t" << "\n";
     }
 }
 
@@ -172,7 +173,7 @@ void write_columns(std::ofstream &gas_file)
 {
     if (gas_file.is_open())
     {
-        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\tPE\n";
+        gas_file << "t\tn\tx\ty\tz\tvx\tvy\tvz\tax\tay\taz\tPE\tMOMx\tMOMy\tMOMz\n";
     }
 }
 
@@ -244,7 +245,7 @@ void verlet(std::vector<Particle> &particles, int step, const double half_box, s
     // Perform write_data(), velocity and position updates on each particle.
     for (int i = 0; i < N; ++i)
     {
-        write_data(particles[i], i, step, gas_file);
+        write_data(particles[i], i, step, gas_file, momentum);
         particles[i].v.set(particles[i].v.x() + 0.5 * dt * particles[i].a.x(), particles[i].v.y() + 0.5 * dt * particles[i].a.y(), particles[i].v.z() + 0.5 * dt * particles[i].a.z());
         particles[i].r.set(particles[i].r.x() + dt * particles[i].v.x(), particles[i].r.y() + dt * particles[i].v.y(), particles[i].r.z() + dt * particles[i].v.z());
         check_boundary_conditions(particles[i], half_box, momentum);
@@ -301,7 +302,7 @@ void random_init_conditions(std::vector<Particle> &particles)
  *
  * @param[in] particles vector of particles.
  * */
-void lattice_init_conditions(std::vector<Particle> &particles)
+void lattice_init_conditions(std::vector<Particle> &particles, double spacing)
 {
     // Calculate the number of particles along each axis
     int num_per_axis = ceil(pow(N, 1.0 / 3.0));
@@ -318,9 +319,9 @@ void lattice_init_conditions(std::vector<Particle> &particles)
                     break; // Prevent out-of-bounds access
 
                 // Calculate the position of the particle along each axis
-                double x = (i - num_per_axis / 2.0) * 1;
-                double y = (j - num_per_axis / 2.0) * 1;
-                double z = (k - num_per_axis / 2.0) * 1;
+                double x = (i - num_per_axis / 2.0) * spacing;
+                double y = (j - num_per_axis / 2.0) * spacing;
+                double z = (k - num_per_axis / 2.0) * spacing;
 
                 particles[index].r.set(x, y, z);
                 index += 1;
@@ -348,7 +349,7 @@ int main()
 
     // Asks user for specific test case.
     int check_bound;
-    std::cout << "Would you like to check if 2 particles are bound to one another? (0 if no, 1 if yes): ";
+    std::cout << "Would you like to check if 2 particles are bound to one another or rebounding off wall? (0 if no, 1 if bound, 2 if rebound off wall): ";
     std::cin >> check_bound;
     if (check_bound == 1)
     {
@@ -362,6 +363,17 @@ int main()
         particles[1].r.set(-0.5, 0, 0);
         particles[0].v.set(0.01, 0, 0);
         particles[1].v.set(-0.01, 0, 0);
+    }
+    if (check_bound == 2)
+    {
+        // Sets up system for checking if particles are bound to one another
+        init_conditions = "bouncing_off_walls";
+        std::cout << "Will set initial coniditons accordingly.\nn is now = 1" << std::endl;
+        N = 1;
+        particles.resize(N, Particle(dimentionless_mass)); // Resize particles vector
+        // Space particles 1 sigma apart.
+        particles[0].r.set(0.1, 0, 0);
+        particles[0].v.set(0.1, 0.075, 0.05);
     }
 
     else
@@ -385,7 +397,7 @@ int main()
         else if (init_cond == "Lattice")
         {
             init_conditions = "lattice";
-            lattice_init_conditions(particles);
+            lattice_init_conditions(particles, 1.0);
             std::cout << "Set Lattice Initial Conditions to all particles!" << std::endl;
         }
     }
@@ -440,12 +452,13 @@ int main()
         }
     }
 
-    // Required to find pressure later.
-    vec momentum(0.0, 0.0, 0.0);
+    
 
     // Vertlet loop begins!
     for (int i = 0; i < steps; ++i)
     {
+        // Required to find pressure later.
+        vec momentum(0.0, 0.0, 0.0);
         verlet(particles, i, half_box, gas_file, momentum);
     }
 
@@ -456,14 +469,6 @@ int main()
     auto seconds = sim_duration - minutes;
     std::cout << "Simulation Runtime " << minutes.count() << ":" << seconds.count() << " (MM:ss) \n";
     gas_file << "duration=" << minutes.count() << ":" << seconds.count() << "\n";
-
-    // Pressure is related by total momentum / (box area * duration simulation was ran.)
-    double pressure_x = momentum.x() / (pow(box_size, 2) * duration);
-    double pressure_y = momentum.y() / (pow(box_size, 2) * duration);
-    double pressure_z = momentum.z() / (pow(box_size, 2) * duration);
-    gas_file << "pressure_x=" << pressure_x << "\n";
-    gas_file << "pressure_y=" << pressure_y << "\n";
-    gas_file << "pressure_z=" << pressure_z << "\n";
 
     // close gas file.
     gas_file.close();
