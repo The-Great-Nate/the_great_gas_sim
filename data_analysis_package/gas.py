@@ -19,7 +19,7 @@ class Particles:
     """
     This class holds a database positions, velocities, accelerations, kinetic and potential energies of particles..
     """
-    def __init__(self, database_name:Union[str, pd.DataFrame]) -> None:
+    def __init__(self, database_name:str) -> None:
         """
         Creates a private attribute of the database imported from a file.
         :param database_name (string) : The name the database file in the filesystem.
@@ -31,17 +31,14 @@ class Particles:
         __N, __dt, __steps, __box_size, __duration : Attributes storing each respective system parameter. Prevents running extract_parameters() & casts parameters to correct datatype.
         """
         self.file_path = f"data\{database_name}"
-        self.__database = pd.read_csv(self.file_path, sep="\t", skiprows = 6)
+        self.__database = pd.read_csv(self.file_path, delimiter="\t", skiprows = 6, index_col=False)
         self.__parameters = self.extract_parameters()
-        self.__database = self.__database[:-4]
+        self.__database = self.__database[:-1]
         self.__N = int(self.__parameters["N"])
         self.__dt = float(self.__parameters["dt"])
         self.__steps = int(self.__parameters["steps"])
         self.__box_size = float(self.__parameters["box_size"])
         self.__duration = str(self.__parameters["duration"])
-        self.__pressure_x = float(self.__parameters["pressure_x"])
-        self.__pressure_y = float(self.__parameters["pressure_y"])
-        self.__pressure_z = float(self.__parameters["pressure_z"])
 
     def get_df(self) -> pd.DataFrame:
         """
@@ -84,7 +81,7 @@ class Particles:
         :return: dataframe in __duration
         """
         return self.__duration
-
+    
     def set_df(self, df: pd.DataFrame) -> None:
         """
         Sets __database to the parameter
@@ -107,10 +104,10 @@ class Particles:
                 break
             params = line.split("=")
             parameters[params[0]] = params[1]
-        for i in range(-1,-5,-1):
-            line = lines[i]
-            params = line.split("=")
-            parameters[params[0]] = params[1]
+        #to get duration
+        line = lines[-1]
+        params = line.split("=")
+        parameters[params[0]] = params[1]
         return parameters
 
     def get_speed(self, data: pd.DataFrame = None) -> pd.Series:
@@ -156,7 +153,63 @@ class Particles:
         PEt_df = pd.DataFrame({"t":time_steps, "Total Potential Energy per Timestep":PE_s})
         return PEt_df
     
+    def get_total_momentum_per_step(self) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of the total momentum when collisions with the wall occur during each timestep.
+        :return: pandas DataFrame of time and total momentum when collisions with the wall occur
+        """
+        temp_data = self.__database.copy()
+        time_steps = np.arange(0, self.__steps * self.__dt, self.__dt)
+        MOMx = np.zeros(self.__steps)
+        MOMy = np.zeros(self.__steps)
+        MOMz = np.zeros(self.__steps)
+        for time, group in temp_data.groupby("t"):
+            total_MOMx_time = np.sum(group["MOMx"])
+            total_MOMy_time = np.sum(group["MOMy"])
+            total_MOMz_time = np.sum(group["MOMz"])
+            MOMx[int(float(time)/self.__dt)] = total_MOMx_time
+            MOMy[int(float(time)/self.__dt)] = total_MOMy_time
+            MOMz[int(float(time)/self.__dt)] = total_MOMz_time
+        MOM_df = pd.DataFrame({"t":time_steps, 
+                               "Total MOMx":MOMx,
+                               "Total MOMy":MOMy,
+                               "Total MOMz":MOMz,})
+        return MOM_df
+    
+    def get_pressure_exerted_per_step(self, data = None) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of the pressure when collisions with the wall occur during each timestep.
+        :param: data, can be none, or if input, the pressure will be calculated from the input if there are MOMx, MOMy, MOMz Columns.
+        :return: pandas DataFrame of time and pressure when collisions with the wall occur
+        """
+        if data is None:
+            total_momentums_time = self.get_total_momentum_per_step()
+            Px = total_momentums_time["Total MOMx"] / (self.__box_size**2 * self.__dt)
+            Py = total_momentums_time["Total MOMy"] / (self.__box_size**2 * self.__dt)
+            Pz = total_momentums_time["Total MOMz"] / (self.__box_size**2 * self.__dt)
+            P_df = pd.DataFrame({"t":total_momentums_time["t"], 
+                                "Total Px":Px,
+                                "Total Py":Py,
+                                "Total Pz":Pz,})
+            return P_df
+        else:
+            total_momentums_time = data
+            dt = data["t"][1] - data["t"][0]
+            Px = total_momentums_time["Total MOMx"] / (self.__box_size**2 * dt)
+            Py = total_momentums_time["Total MOMy"] / (self.__box_size**2 * dt)
+            Pz = total_momentums_time["Total MOMz"] / (self.__box_size**2 * dt)
+            P_df = pd.DataFrame({"t":total_momentums_time["t"], 
+                                "Total Px":Px,
+                                "Total Py":Py,
+                                "Total Pz":Pz,})
+            return P_df
+    
     def resample_by_mean(self, time_step:str, df:pd.DataFrame = None) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of resampled data by timeframe user inputs
+        :param: data, can be none, or if input, the Input will be resampled data by timeframe user inputs if it has valid time column
+        :return: pandas DataFrame resampled data
+        """
         if df is None:
             resampled_data = self.__database.copy()
             if "n" not in list(resampled_data.columns):
@@ -190,7 +243,12 @@ class Particles:
                 return resampled_df
             
 
-    def get_percent_errs_over_duration(self, data, time:pd.Series = None, col = None, plot:bool = False, save:bool = False):
+    def get_percent_errs_over_duration(self, data, time:pd.Series = None, col = None, plot:bool = False, save:bool = False) -> np.array:
+        """
+        Returns array of durations and percentage errors
+        :return: durations, duration of data taken
+        :return: percent_errs, percentage errors wrt duration
+        """
         if isinstance(data, str):
             if data not in list(self.__database.columns):
                 durations = np.arange(0, self.__dt * self.__steps, self.__dt)
@@ -248,9 +306,16 @@ class Particles:
                 return durations, percent_errs
 
     def get_file_size(self) -> float:
+        """
+        Returns file path
+        """
         return os.path.getsize(self.file_path)
 
     def concat(self, dfs:list[pd.DataFrame], join:str = "Outer", axis:int = 1):
+        """
+        Joins 2 data frams together
+        :return: concatenated data frame
+        """
         return pd.concat(dfs, join = join, axis = axis)
     
 
@@ -374,9 +439,9 @@ class Particles:
                 filter_nan[col_2], errors="coerce").notna().all() == False:
             sns.catplot(data=self.__database, x=col_1, y=col_2, kind="box", aspect=1.5, hue=hue)
         else:
-            plot = sns.relplot(data=self.__database, x=col_1, y=col_2, hue=hue)
-            plot.fig.suptitle(f"{col_1} x {col_2}", fontsize=16)
-            plot.fig.subplots_adjust(top=0.9)
+            fig, ax = plt.subplots(figsize = (10,6))
+            self.__database.plot(ax = ax, x=col_1, y=col_2)
+            ax.set_title(f"\"{col_1}\" x \"{col_2}\"", fontsize=16)
 
     def pairwise_plots(self, hue=None) -> None:
         """
@@ -681,3 +746,78 @@ class Particles:
         plt.show()
 
         return ani
+    
+class SubData(Particles):
+    """
+    This class holds a database positions, velocities, accelerations, kinetic and potential energies of particles..
+    """
+    def __init__(self, database_name:pd.DataFrame) -> None:
+        """
+        Creates a private attribute of the database imported from a file.
+        :param database_name (string) : The name the database file in the filesystem.
+        :param database_name (pd.DataFrame) : The DataFrame so methods of this class can be used.
+        Attributes
+        ----------
+        __database : Pandas Data Frame
+        __parameters : Dictionary of system parameters
+        __N, __dt, __steps, __box_size, __duration : Attributes storing each respective system parameter. Prevents running extract_parameters() & casts parameters to correct datatype.
+        """
+        self.__database = database_name
+        self.__steps = len(database_name)
+        
+    def get_total_kinetic_per_step(self) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of the total kinetic energy of the system during each timestep.
+        :return: pandas DataFrame of time and total kinetic energy
+        """
+        if "vx" not in list(self.__database.columns) or "vy" not in list(self.__database.columns) or "vz" not in list(self.__database.columns):
+            raise ValueError("Database must have velocity columns for X, Y, Z Components called \"vx\", \"vy\", \"vz\"")
+        else:
+            Particles.get_total_kinetic_per_step(self)
+    
+    def get_total_potential_per_step(self) -> pd.DataFrame:
+        """
+        Returns pandas DataFrame of the total potential energy of the system during each timestep.
+        :return: pandas DataFrame of time and total potential energy
+        """
+        if "PE" not in list(self.__database.columns):
+            raise ValueError("Database must have potential energy column \"PE\"")
+        else:
+            Particles.get_total_potential_per_step(self)
+
+    def plot_relationship(self, col_1: str, col_2: str, hue=None) -> None:
+        """
+        Returns None if neither parameter is a valid column name.
+        Outputs either:
+        • countplot (quantity of observations in each categorical bin)
+        • catplot (Set to plot box plot to show distribution between categorical var and numeric)
+        • rel (scatterplot between col_1 and col_2)
+        :param col_1: column 1
+        :param col_2: column 2
+        :param hue: Grouping variable that will produce elements with different colors. Ideally use a categorical variable.
+        :return: None
+        """
+        if col_1 not in list(self.__database.columns) or col_2 not in list(self.__database.columns):
+            print("Enter a valid column name in the database")
+            return
+
+        '''
+        filter_nan is necessary. 
+        The check for categorical variables below tries to convert values in a column to a
+        numeric format. If any value cant be converted to numeric, it is NaN. A boolean mask is applied and if entire
+        column is False, the column is numeric. However if column has a NaN value before this is even done, the column
+        is assumed to be categorical which is bad. 
+        '''
+        filter_nan = self.__database.dropna(subset=[col_1, col_2])
+        if pd.to_numeric(filter_nan[col_1], errors="coerce").notna().all() == False and pd.to_numeric(filter_nan[col_2],
+                                                                                                    errors="coerce").notna().all() == False:
+            print("Comparing 2 categorical variables")
+            sns.countplot(data=self.__database, x=col_1, hue=col_2)
+        elif pd.to_numeric(filter_nan[col_1], errors="coerce").notna().all() == False or pd.to_numeric(
+                filter_nan[col_2], errors="coerce").notna().all() == False:
+            sns.catplot(data=self.__database, x=col_1, y=col_2, kind="box", aspect=1.5, hue=hue)
+        else:
+            fig, ax = plt.subplots(figsize = (10,6))
+            self.__database.plot(ax = ax, x=col_1, y=col_2)
+            ax.set_title(f"\"{col_1}\" x \"{col_2}\"", fontsize=16)
+
