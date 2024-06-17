@@ -301,6 +301,7 @@ void random_init_conditions(std::vector<Particle> &particles)
  * Places particles in a box as close to each other as possible before instability occurs
  *
  * @param[in] particles vector of particles.
+ * @param[in] spacing Spacing to place the particles at
  * */
 void lattice_init_conditions(std::vector<Particle> &particles, double spacing)
 {
